@@ -17,20 +17,15 @@ def evaluateMove():
         return jsonify({"message": "Error: Missing repertoire or game_moves parameters"}), 400
     
     try:
-        # Check if the positions are too simple
-        if repertoire.strip() == game_moves.strip() and "1. e4 e5" in repertoire:
-            # Return a simple message for identical positions
-            return jsonify({
-                "message": "No deviation detected. The game follows the repertoire exactly.",
-                "moves": [
-                    "Your move: e4 (popularity: 44.8%, eval: 0.4)",
-                    "Opponent has 20+ good moves in this position",
-                    "Opponent has a 5.2% chance to commit a mistake",
-                    "Opponent has a 0.8% chance to commit a blunder"
-                ]
-            })
+        # The special case handling (below) is no longer needed since we updated 
+        # the find_first_deviation function to handle exact matches
         
         result = find_first_deviation(repertoire, game_moves, is_user_white)
+        
+        # Ensure we always return a message, even for exact matches
+        if 'message' not in result:
+            result['message'] = "No deviation detected. The game follows the repertoire exactly."
+        
         return jsonify(result)
     except Exception as e:
         # Capture the full traceback

@@ -271,153 +271,288 @@ def get_mistake_blunder_likelihood_from_fen(fen, mistake_threshold=200, blunder_
 
 
 def get_sharpest_lines_from_fen(fen="rn1qk1nr/pp3pbp/4p1p1/2ppP3/3P4/2N2B1P/PPP2PP1/R1BQK2R w KQkq - 0 9", mistake_threshold=150, blunder_threshold=400, verbose=False, dev_limit=100):
-    # Put thresholds negative when analysing white moves
-    # and positive when analysing black moves
-
-    opening_explorer_from_fen = opening_explorer(fen)
-    total_games = get_total_games_played(opening_explorer_from_fen, from_popularity=0, to_popularity=-1)
-
-    # Get initial eval
+    # Initialize stockfish once at the beginning
     stockfish = get_stockfish()
+    if not stockfish:
+        return {
+            "your_move": None,
+            "best_move": None,
+            "sharpest_move": None,
+            "status": "Stockfish not available for analysis"
+        }
+    
+    # Cache for opening explorer results to avoid redundant API calls
+    explorer_cache = {}
+    
+    # Step 1: Get opening explorer data for initial position
+    try:
+        opening_explorer_from_fen = opening_explorer(fen)
+        explorer_cache[fen] = opening_explorer_from_fen
+    except TooManyRequestsError:
+        return {
+            "your_move": None,
+            "best_move": None,
+            "sharpest_move": None,
+            "status": "Rate limit reached. Please try again later."
+        }
+    except Exception as e:
+        return {
+            "your_move": None,
+            "best_move": None,
+            "sharpest_move": None,
+            "status": f"Error analyzing position: {str(e)}"
+        }
+    
+    # Calculate total games once
+    total_games = get_total_games_played(opening_explorer_from_fen, from_popularity=0, to_popularity=-1)
+    if total_games == 0:
+        return {
+            "your_move": None,
+            "best_move": None,
+            "sharpest_move": None,
+            "status": "Not enough games in database for analysis"
+        }
+    
+    # Set up initial position evaluation
     stockfish.set_fen_position(fen)
-    current_position = stockfish.get_fen_position()
-    current_eval = stockfish.get_top_moves(1)[0]["Centipawn"]
-    messages = []
-
-    for move in opening_explorer_from_fen["moves"][:dev_limit]:
-        # Checking that it has enough games in the Opening Explorer to make stats
-        if get_total_games_played(opening_explorer_from_fen, from_move=move["uci"], move_system="uci")>5:
-
-            # Initialise
-            mate_eval = None
-            mistake_likelihood = 0
-            blunder_likelihood = 0
-            good_move = []
-            stockfish = get_stockfish()
-            stockfish.set_fen_position(fen)
-            current_position = stockfish.get_fen_position()
-
-            # Fixing issue with castling
-            if (move["san"]=='O-O')&(move["uci"]=='e8h8'):
-                move["uci"]='e8g8'
-            if (move["san"]=="O-O-O")&(move["uci"]=='e8a8'):
-                move["uci"]='e8c8'
-            if (move["san"]=='O-O')&(move["uci"]=='e1h1'):
-                move["uci"]='e1g1'
-            if (move["san"]=="O-O-O")&(move["uci"]=='e1a1'):
-                move["uci"]='e1c1'
-
-            # Make a move from the Opening Explorer
-            stockfish.make_moves_from_current_position([move["uci"]])
-            new_position = stockfish.get_fen_position()
-            opening_explorer_from_new_fen = opening_explorer(new_position)
-            new_total_games = get_total_games_played(opening_explorer_from_new_fen, from_popularity=0, to_popularity=-1)
-
-            # Handling mates in the eval
-            mate_eval = stockfish.get_top_moves(1)[0]["Mate"]
-            if mate_eval != None:
-                mistake_likelihood += get_total_games_played(opening_explorer_from_fen, from_move=move["uci"], move_system="uci")
-                blunder_likelihood += get_total_games_played(opening_explorer_from_fen, from_move=move["uci"], move_system="uci")
-                print("Your move:", move["san"],
-                      "(popularity:", '{:.1%}'.format(round(get_total_games_played(opening_explorer_from_fen,
-                                                                                   from_move=move["uci"],
-                                                                                   move_system="uci") / total_games, 3)
-                                                     ),
-                  ", eval:", "mate in", mate_eval, ")")
-                print("")
-                continue
-
-            # Get intermediate eval
-            intermediate_eval = stockfish.get_top_moves(1)[0]["Centipawn"]
-
-            move_str = "Your move: {} (popularity: {:.1%}, eval: {})".format(
-                move["san"],
-                round(get_total_games_played(opening_explorer_from_fen, from_move=move["uci"], move_system="uci") / total_games, 3),
-                round(intermediate_eval/100,1)
-            )
-
-            print(move_str)
-            messages.append(move_str)
-
-            for new_move in opening_explorer_from_new_fen["moves"][:dev_limit]: # limit the # of lines looked at for dev
-                # Reinitialise
-                mate_eval = None
-                stockfish = get_stockfish()
-                stockfish.set_fen_position(new_position)
-                new_position = stockfish.get_fen_position()
-
-                # Fixing issue with castling for the new move too
-                if (new_move["san"]=='O-O')&(new_move["uci"]=='e8h8'):
-                    new_move["uci"]='e8g8'
-                if (new_move["san"]=="O-O-O")&(new_move["uci"]=='e8a8'):
-                    new_move["uci"]='e8c8'
-                if (new_move["san"]=='O-O')&(new_move["uci"]=='e1h1'):
-                    new_move["uci"]='e1g1'
-                if (new_move["san"]=="O-O-O")&(new_move["uci"]=='e1a1'):
-                    new_move["uci"]='e1c1'
-
-                # Play new move
-                stockfish.make_moves_from_current_position([new_move["uci"]])
-                newest_position = stockfish.get_fen_position()
-
-                # Handling mates in the eval
-                mate_eval = stockfish.get_top_moves(1)[0]["Mate"]
-                if mate_eval != None:
-                    mistake_likelihood += get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
-                    blunder_likelihood += get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
-                    if verbose==True:
-                        print(new_move["san"],
-                              get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci"),
-                              total_games,
-                              round(get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci") / total_games, 3),
-                              "Mate in", mate_eval)
-                    continue
-
-                # Getting new eval
-                newest_eval = stockfish.get_top_moves(1)[0]["Centipawn"]
-                diff = newest_eval - current_eval
-
-                # Automatically identifying if we're evaluating black or white
-                if newest_position.split(" ")[1] == 'b':
-                    if diff <= mistake_threshold * -1:
-                        mistake_likelihood += get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
-                    if diff <= blunder_threshold * -1:
-                        blunder_likelihood += get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
-                    if diff > mistake_threshold * -1:
-                        good_move.append(new_move)
-                else:
-                    if diff >= mistake_threshold:
-                        mistake_likelihood += get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
-                    if diff >= blunder_threshold:
-                        blunder_likelihood += get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
-                    if diff < mistake_threshold:
-                        good_move.append(new_move)
-
-                if verbose==True:
-                    print("New move:", new_move["san"])
-                    print(move["san"],
-                          get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci"),
-                          new_total_games,
-                          round(get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci") / new_total_games, 3),
-                          diff
-                     )
-
-        # Move is not popular enough in the Opening Explorer, go to next move
-        else:
+    try:
+        current_eval = stockfish.get_top_moves(1)[0]["Centipawn"]
+    except:
+        return {
+            "your_move": None,
+            "best_move": None,
+            "sharpest_move": None,
+            "status": "Error evaluating position"
+        }
+    
+    # Step 2: Identify the most frequent move (Your Move)
+    # Get the most popular move from opening explorer
+    moves_with_data = []
+    
+    # Sort moves by popularity
+    popular_moves = sorted(opening_explorer_from_fen["moves"], 
+                         key=lambda m: get_total_games_played(opening_explorer_from_fen, from_move=m["uci"], move_system="uci"), 
+                         reverse=True)
+    
+    your_move = None
+    best_move = None
+    sharpest_move = None
+    
+    if popular_moves:
+        # Process the most popular move (Your Move)
+        most_popular = popular_moves[0]
+        your_move = process_move(most_popular, opening_explorer_from_fen, total_games, fen, 
+                               stockfish, current_eval, explorer_cache, mistake_threshold, 
+                               blunder_threshold, "Your Move")
+        
+        # Add this move to our list
+        moves_with_data.append(your_move)
+    
+    # Step 3: Find the best move by evaluation
+    for move in popular_moves[:min(5, len(popular_moves))]:  # Only check top 5 popular moves for efficiency
+        move_games = get_total_games_played(opening_explorer_from_fen, from_move=move["uci"], move_system="uci")
+        if move_games < 3:  # Skip moves with too few games
             continue
+        
+        move_data = process_move(move, opening_explorer_from_fen, total_games, fen, 
+                               stockfish, current_eval, explorer_cache, mistake_threshold, 
+                               blunder_threshold, "Candidate")
+        
+        # Track this move
+        moves_with_data.append(move_data)
+    
+    # Sort by evaluation (highest eval first)
+    moves_by_eval = sorted(moves_with_data, key=lambda m: m["eval_numeric"] if m["eval_numeric"] is not None else -9999, reverse=True)
+    
+    # The best move is the one with highest evaluation
+    if moves_by_eval and len(moves_by_eval) > 0:
+        best_move = moves_by_eval[0]
+        best_move["type"] = "Best Move"
+    
+    # Step 4: Find the sharpest move (highest blunder likelihood for opponent)
+    # Sort by blunder likelihood for opponent
+    moves_by_sharpness = sorted(moves_with_data, key=lambda m: m["blunder_chance"] if m["blunder_chance"] is not None else 0, reverse=True)
+    
+    # The sharpest move is the one with highest blunder chance for opponent
+    if moves_by_sharpness and len(moves_by_sharpness) > 0:
+        sharpest_move = moves_by_sharpness[0]
+        sharpest_move["type"] = "Sharpest Move"
+    
+    # Return structured data instead of plain text messages
+    return {
+        "your_move": your_move,
+        "best_move": best_move,
+        "sharpest_move": sharpest_move,
+        "status": "success"
+    }
 
+def process_move(move, opening_explorer_from_fen, total_games, fen, stockfish, current_eval, explorer_cache, mistake_threshold, blunder_threshold, move_type):
+    # Helper function to process a single move's data
+    move_games = get_total_games_played(opening_explorer_from_fen, from_move=move["uci"], move_system="uci")
+    popularity = round(move_games / total_games, 3)
+    
+    # Fix castling notation
+    move_uci = move["uci"]
+    if move["san"] == 'O-O' and move_uci == 'e8h8':
+        move_uci = 'e8g8'
+    elif move["san"] == "O-O-O" and move_uci == 'e8a8':
+        move_uci = 'e8c8'
+    elif move["san"] == 'O-O' and move_uci == 'e1h1':
+        move_uci = 'e1g1'
+    elif move["san"] == "O-O-O" and move_uci == 'e1a1':
+        move_uci = 'e1c1'
+    
+    # Evaluate position after move
+    stockfish.set_fen_position(fen)
+    stockfish.make_moves_from_current_position([move_uci])
+    new_position = stockfish.get_fen_position()
+    
+    # Get eval after move
+    top_moves = stockfish.get_top_moves(1)
+    if not top_moves:
+        return {
+            "san": move["san"],
+            "uci": move_uci,
+            "popularity": popularity,
+            "popularity_text": f"{popularity:.1%}",
+            "eval": "Unknown",
+            "eval_numeric": None,
+            "good_moves": 0,
+            "mistake_chance": 0,
+            "blunder_chance": 0,
+            "type": move_type,
+            "from_square": move_uci[:2],
+            "to_square": move_uci[2:4]
+        }
+    
+    mate_eval = top_moves[0]["Mate"]
+    eval_text = ""
+    eval_numeric = None
+    
+    if mate_eval is not None:
+        eval_text = f"mate in {mate_eval}"
+        # Use a high value for mate to sort properly
+        eval_numeric = 10000 if mate_eval > 0 else -10000
+    else:
+        intermediate_eval = top_moves[0]["Centipawn"]
+        eval_text = f"{round(intermediate_eval/100, 1)}"
+        eval_numeric = intermediate_eval
+    
+    # Initialize other fields
+    good_moves = 0
+    mistake_chance = 0
+    blunder_chance = 0
+    
+    # Get new position data - using cache if available
+    if new_position in explorer_cache:
+        opening_explorer_from_new_fen = explorer_cache[new_position]
+    else:
         try:
-            print("Opponent has", len(good_move), "good move(s) in this position")
-            print("Opponent has a", '{:.1%}'.format(mistake_likelihood / new_total_games), "chance to commit a mistake")
-            print("Opponent has a", '{:.1%}'.format(blunder_likelihood / new_total_games), "chance to commit a blunder")
-            print("")
-
-            messages.append("Opponent has " + str(len(good_move)) + " good move(s) in this position")
-            messages.append("Opponent has a " + '{:.1%}'.format(mistake_likelihood / total_games) + " chance to commit a mistake")
-            messages.append("Opponent has a " + '{:.1%}'.format(blunder_likelihood / total_games) + " chance to commit a blunder")
-            messages.append("")
+            opening_explorer_from_new_fen = opening_explorer(new_position)
+            explorer_cache[new_position] = opening_explorer_from_new_fen
         except:
-            print("Not enough games in Opening Explorer")
-            print("")
-
-    return messages
+            return {
+                "san": move["san"],
+                "uci": move_uci,
+                "popularity": popularity,
+                "popularity_text": f"{popularity:.1%}",
+                "eval": eval_text,
+                "eval_numeric": eval_numeric,
+                "good_moves": 0,
+                "mistake_chance": 0,
+                "blunder_chance": 0,
+                "type": move_type,
+                "from_square": move_uci[:2],
+                "to_square": move_uci[2:4]
+            }
+    
+    new_total_games = get_total_games_played(opening_explorer_from_new_fen, from_popularity=0, to_popularity=-1)
+    if new_total_games == 0:
+        return {
+            "san": move["san"],
+            "uci": move_uci,
+            "popularity": popularity,
+            "popularity_text": f"{popularity:.1%}",
+            "eval": eval_text,
+            "eval_numeric": eval_numeric,
+            "good_moves": 0,
+            "mistake_chance": 0,
+            "blunder_chance": 0,
+            "type": move_type,
+            "from_square": move_uci[:2],
+            "to_square": move_uci[2:4]
+        }
+    
+    # Analyze opponent's possible responses
+    good_move_count = 0
+    mistake_count = 0
+    blunder_count = 0
+    
+    # Limit responses to analyze for efficiency
+    response_limit = min(5, len(opening_explorer_from_new_fen["moves"]))
+    for new_move in opening_explorer_from_new_fen["moves"][:response_limit]:
+        move_count = get_total_games_played(opening_explorer_from_new_fen, from_move=new_move["uci"], move_system="uci")
+        
+        # Skip rarely played moves with insufficient sample size
+        if move_count < 2:
+            continue
+            
+        # Fix castling notation
+        new_move_uci = new_move["uci"]
+        if new_move["san"] == 'O-O' and new_move_uci == 'e8h8':
+            new_move_uci = 'e8g8'
+        elif new_move["san"] == "O-O-O" and new_move_uci == 'e8a8':
+            new_move_uci = 'e8c8'
+        elif new_move["san"] == 'O-O' and new_move_uci == 'e1h1':
+            new_move_uci = 'e1g1'
+        elif new_move["san"] == "O-O-O" and new_move_uci == 'e1a1':
+            new_move_uci = 'e1c1'
+        
+        # Quick evaluation
+        stockfish.set_fen_position(new_position)
+        stockfish.make_moves_from_current_position([new_move_uci])
+        newest_position = stockfish.get_fen_position()
+        
+        top_resp = stockfish.get_top_moves(1)
+        if not top_resp:
+            continue
+            
+        mate_eval = top_resp[0]["Mate"]
+        if mate_eval is not None:
+            # Count as mistake/blunder if mate is found
+            mistake_count += move_count
+            blunder_count += move_count
+            continue
+        
+        newest_eval = top_resp[0]["Centipawn"]
+        diff = newest_eval - current_eval
+        
+        # Evaluate quality based on position
+        is_white_to_move = newest_position.split(" ")[1] == 'w'
+        
+        if (is_white_to_move and diff <= -mistake_threshold) or (not is_white_to_move and diff >= mistake_threshold):
+            mistake_count += move_count
+            if (is_white_to_move and diff <= -blunder_threshold) or (not is_white_to_move and diff >= blunder_threshold):
+                blunder_count += move_count
+        else:
+            good_move_count += 1
+    
+    # Calculate percentages
+    if new_total_games > 0:
+        mistake_chance = mistake_count / new_total_games if new_total_games > 0 else 0
+        blunder_chance = blunder_count / new_total_games if new_total_games > 0 else 0
+    
+    return {
+        "san": move["san"],
+        "uci": move_uci,
+        "popularity": popularity,
+        "popularity_text": f"{popularity:.1%}",
+        "eval": eval_text,
+        "eval_numeric": eval_numeric,
+        "good_moves": good_move_count,
+        "mistake_chance": mistake_chance,
+        "blunder_chance": blunder_chance,
+        "type": move_type,
+        "from_square": move_uci[:2],
+        "to_square": move_uci[2:4]
+    }

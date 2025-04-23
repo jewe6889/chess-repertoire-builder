@@ -69,3 +69,70 @@ function findCommonMoves(moves, repertoire) {
   };
 }
 
+/**
+ * Analyzes the current position against the repertoire and handles displaying results
+ * @param {Array} moves - Array of moves played in the game
+ * @param {Object} repertoire - User's repertoire object
+ * @returns {Object} Analysis results including message and sharpest lines
+ */
+function analyzeRepertoirePosition(moves, repertoire) {
+  const { lastCommonIndex, isBlack } = findCommonMoves(moves, repertoire);
+  
+  // Perfect match - all moves followed repertoire
+  if (lastCommonIndex === moves.length - 1) {
+    return {
+      message: "Congratulations! You perfectly followed your repertoire. Keep up the great work!",
+      perfectMatch: true,
+      moves: [] // No need for sharpest lines analysis
+    };
+  }
+  
+  // Calculate the deviation point
+  const deviationIndex = lastCommonIndex + 1;
+  
+  // Handle case where moves deviated from repertoire
+  if (deviationIndex < moves.length) {
+    const deviationMove = moves[deviationIndex];
+    const isUserMove = (deviationIndex % 2 === 0) === !isBlack; // Check if it's user's move
+    
+    if (isUserMove) {
+      // User deviated from repertoire
+      return {
+        message: `You deviated from your repertoire with ${deviationMove}`,
+        perfectMatch: false,
+        moves: getSharpestLines() // Replace with actual function to get sharp lines
+      };
+    } else {
+      // Opponent deviated from repertoire
+      return {
+        message: `Opponent deviated from your repertoire with ${deviationMove}`,
+        perfectMatch: false,
+        moves: getSharpestLines() // Replace with actual function to get sharp lines
+      };
+    }
+  }
+  
+  // Default response (shouldn't normally reach here)
+  return {
+    message: "Analyzing position...",
+    perfectMatch: false,
+    moves: []
+  };
+}
+
+/**
+ * Get sharpest lines for the current position
+ * This is a placeholder function that should be replaced with actual implementation
+ * @returns {Array} Array of sharp line descriptions
+ */
+function getSharpestLines() {
+  // This would normally call the backend or use a chess engine
+  // For now, returning placeholder data
+  return [
+    "Your move: e4 (popularity: 44.8%, eval: 0.4)",
+    "Opponent has 20+ good moves in this position",
+    "Opponent has a 5.2% chance to commit a mistake",
+    "Opponent has a 0.8% chance to commit a blunder"
+  ];
+}
+

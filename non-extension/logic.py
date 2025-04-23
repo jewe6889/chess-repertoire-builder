@@ -35,6 +35,13 @@ def find_first_deviation(repertoire, game, is_user_white):
             move_number += 1
         is_white_to_move = not is_white_to_move
 
+    # Check if we've reached the end of the game without deviation
+    if not game_node.variations:
+        return {
+            'message': 'No deviation detected. The game follows the repertoire exactly.',
+            'moves': []  # No need for sharpest lines analysis
+        }
+
     # Calculate next move number for the deviation
     next_move_number = move_number
     if not is_white_to_move:
@@ -44,19 +51,28 @@ def find_first_deviation(repertoire, game, is_user_white):
         if not next_moves:
             fen = game_node.board().fen()
             print(fen)
-            messages = get_sharpest_lines_from_fen(fen=fen, mistake_threshold=150, blunder_threshold=400, verbose=False, dev_limit=2)
+            analysis_results = get_sharpest_lines_from_fen(fen=fen, mistake_threshold=150, blunder_threshold=400, verbose=False, dev_limit=2)
             
-            # Add best move and sharpest line info for visualization
+            # Extract move info for visualization
             best_move = None
-            if messages and len(messages) > 0 and 'Your move:' in messages[0]:
-                move_text = messages[0].split('Your move:')[1].split('(')[0].strip()
-                # Dummy values for now - would need to convert algebraic notation to coordinates
-                best_move = {'from': 'e2', 'to': 'e4'}
+            if analysis_results["best_move"]:
+                best_move = {
+                    'from': analysis_results["best_move"]["from_square"],
+                    'to': analysis_results["best_move"]["to_square"]
+                }
+            
+            sharpest_line = None
+            if analysis_results["sharpest_move"]:
+                sharpest_line = {
+                    'from': analysis_results["sharpest_move"]["from_square"],
+                    'to': analysis_results["sharpest_move"]["to_square"]
+                }
             
             return {
-                'moves': messages, 
+                'structured_moves': analysis_results, 
                 'message': f'Prep ran out, you played {get_san(game_node, game_node.variations[0].move)}, novelty.',
-                'bestMove': best_move
+                'bestMove': best_move,
+                'sharpestLine': sharpest_line
             }
         else:
             correct_move = get_san(game_node, next_moves[0])
@@ -69,27 +85,42 @@ def find_first_deviation(repertoire, game, is_user_white):
             from_square = chess.square_name(next_moves[0].from_square)
             to_square = chess.square_name(next_moves[0].to_square)
             
+            # Get sharpest lines for the current position
+            fen = game_node.board().fen()
+            print(fen)
+            analysis_results = get_sharpest_lines_from_fen(fen=fen, mistake_threshold=150, blunder_threshold=400, verbose=False, dev_limit=2)
+            
             return {
                 'message': f'You should have played {move_notation} according to your prep.',
-                'bestMove': {'from': from_square, 'to': to_square}
+                'bestMove': {'from': from_square, 'to': to_square},
+                'structured_moves': analysis_results
             }
     else:
         # need to make opponent's move and then grab the FEN
         fen = game_node.variations[0].board().fen()
         print(fen)
-        messages = get_sharpest_lines_from_fen(fen=fen, mistake_threshold=150, blunder_threshold=400, verbose=False, dev_limit=3)
+        analysis_results = get_sharpest_lines_from_fen(fen=fen, mistake_threshold=150, blunder_threshold=400, verbose=False, dev_limit=3)
         
-        # Extract sharpest line from messages if available for visualization
+        # Extract move info for visualization
+        best_move = None
+        if analysis_results["best_move"]:
+            best_move = {
+                'from': analysis_results["best_move"]["from_square"],
+                'to': analysis_results["best_move"]["to_square"]
+            }
+        
         sharpest_line = None
-        if messages and len(messages) > 1:
-            # Try to extract coordinate information from a sharp line
-            # This is a placeholder - you would need to parse actual coordinates from the messages
-            sharpest_line = {'from': 'd7', 'to': 'd5'}
+        if analysis_results["sharpest_move"]:
+            sharpest_line = {
+                'from': analysis_results["sharpest_move"]["from_square"],
+                'to': analysis_results["sharpest_move"]["to_square"]
+            }
         
         opponent_move = get_san(game_node, game_node.variations[0].move)
         return {
-            'moves': messages, 
+            'structured_moves': analysis_results, 
             'message': f'Opponent played {opponent_move} deviating from your prep.',
+            'bestMove': best_move,
             'sharpestLine': sharpest_line
         }
 

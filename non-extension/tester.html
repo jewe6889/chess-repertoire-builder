@@ -15,7 +15,8 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f0f0f0;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
         }
         .container {
             display: flex;
@@ -25,18 +26,18 @@
         .input-section {
             flex: 1;
             min-width: 300px;
-            background-color: white;
+            background-color: #2d2d2d;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
         .results-section {
             flex: 2;
             min-width: 400px;
-            background-color: white;
+            background-color: #2d2d2d;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
         .board-container {
             width: 400px;
@@ -47,8 +48,10 @@
             min-height: 100px;
             margin-bottom: 10px;
             padding: 10px;
-            border: 1px solid #ccc;
+            border: 1px solid #444;
             border-radius: 3px;
+            background-color: #333;
+            color: #e0e0e0;
         }
         button {
             background-color: #4CAF50;
@@ -63,14 +66,13 @@
         button:hover {
             background-color: #45a049;
         }
-        h2 {
-            margin-top: 0;
-            color: #333;
+        h1, h2, h3 {
+            color: #e0e0e0;
         }
         .result-message {
             margin-top: 20px;
             padding: 15px;
-            background-color: #f9f9f9;
+            background-color: #333;
             border-left: 4px solid #4CAF50;
         }
         .move-list {
@@ -79,7 +81,7 @@
         .move {
             margin: 10px 0;
             padding: 10px;
-            background-color: #f5f5f5;
+            background-color: #333;
             border-radius: 3px;
         }
         .example-btn {
@@ -96,6 +98,65 @@
             background-color: #ffe8e8;
             border-radius: 3px;
             display: none;
+        }
+        .moves-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .move-card {
+            border: 1px solid #444;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            width: 220px;
+            overflow: hidden;
+            background-color: #2d2d2d;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .move-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .move-header {
+            padding: 10px;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+        .move-notation {
+            font-size: 20px;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .move-stats {
+            padding: 10px 15px;
+            background-color: #333;
+            font-size: 14px;
+        }
+        .move-stats div {
+            margin-bottom: 5px;
+        }
+        .add-to-repertoire-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            margin-top: 0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .add-to-repertoire-btn:hover {
+            background-color: #2980b9;
+        }
+        .status-message {
+            padding: 15px;
+            margin-top: 15px;
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #856404;
         }
     </style>
 </head>
@@ -240,6 +301,9 @@
         }
         
         function displayResults(result) {
+            // Clear previous result message
+            $("#result-message").empty();
+            
             // If no deviation is detected, show congratulatory message
             if (result.message && result.message.includes("No deviation detected")) {
                 $("#result-message").html("Congratulations! You perfectly followed your repertoire. Keep up the great work!");
@@ -259,17 +323,291 @@
                 addArrow(result.sharpestLine.from, result.sharpestLine.to, '#800080'); // Purple arrow for sharpest line
             }
             
-            // Display sharp lines
+            // Display structured move analysis
             const linesDiv = $("#sharp-lines");
             linesDiv.empty();
             
-            if (result.moves && result.moves.length > 0) {
+            // If we have structured move data, display move cards
+            if (result.structured_moves) {
+                const moveData = result.structured_moves;
+                
+                // Get the move they played (for comparison)
+                let playedMove = "";
+                if (result.message && result.message.includes("played")) {
+                    // Extract the move from messages like "Prep ran out, you played Bc4, novelty."
+                    const moveMatch = result.message.match(/played ([^,]+)/);
+                    if (moveMatch && moveMatch[1]) {
+                        playedMove = moveMatch[1];
+                    }
+                }
+                
+                // If we have the played move, show it for comparison
+                if (playedMove) {
+                    // Try to find this move's data
+                    let playedMoveData = null;
+                    if (moveData.your_move && moveData.your_move.san === playedMove) {
+                        playedMoveData = moveData.your_move;
+                    } else if (moveData.best_move && moveData.best_move.san === playedMove) {
+                        playedMoveData = moveData.best_move;
+                    } else if (moveData.sharpest_move && moveData.sharpest_move.san === playedMove) {
+                        playedMoveData = moveData.sharpest_move;
+                    }
+                    
+                    // Show the played move info if available
+                    if (playedMoveData) {
+                        linesDiv.append(`<p class="played-move-info">Your played move: ${playedMove} (Eval: ${playedMoveData.eval}, Popularity: ${playedMoveData.popularity_text})</p>`);
+                    } else {
+                        linesDiv.append(`<p class="played-move-info">Your played move: ${playedMove}</p>`);
+                    }
+                }
+                
+                // Container for move cards
+                linesDiv.append("<h3>Move Analysis:</h3>");
+                const movesContainer = $('<div class="moves-container"></div>');
+                
+                // Organize the moves we need to display
+                let repertoireMove = null;
+                let bestEvalMove = null;
+                let surpriseMove = null;
+                let sharpestMove = null;
+                
+                // Process moves - sort them by different criteria
+                const allMoves = [];
+                if (moveData.your_move) allMoves.push(moveData.your_move);
+                if (moveData.best_move) allMoves.push(moveData.best_move);
+                if (moveData.sharpest_move) allMoves.push(moveData.sharpest_move);
+                
+                // Find the repertoire move
+                if (result.bestMove && result.message && result.message.includes("should have played")) {
+                    // Extract move from message like "You should have played 2. Nf3 according to your prep."
+                    const moveMatch = result.message.match(/played ([^a-z]+\S+)/i);
+                    if (moveMatch && moveMatch[1]) {
+                        const moveSan = moveMatch[1].replace(/^\d+\.+\s*/, ''); // Remove move number
+                        
+                        // Create a repertoire move object
+                        repertoireMove = {
+                            type: "Repertoire Move",
+                            san: moveSan,
+                            uci: result.bestMove.from + result.bestMove.to,
+                            popularity_text: "N/A",
+                            eval: "N/A",
+                            from_square: result.bestMove.from,
+                            to_square: result.bestMove.to
+                        };
+                    }
+                }
+                
+                // Sort moves by evaluation (highest first)
+                const movesByEval = [...allMoves].sort((a, b) => {
+                    return (b.eval_numeric || -9999) - (a.eval_numeric || -9999);
+                });
+                
+                // Best eval move is the top one
+                if (movesByEval.length > 0) {
+                    bestEvalMove = movesByEval[0];
+                    bestEvalMove.type = "Best Move";
+                }
+                
+                // Find surprise move (good eval, low popularity)
+                const surpriseCandidates = allMoves.filter(move => {
+                    // Good eval but not the highest, and lower popularity
+                    return move.eval_numeric > 0 && 
+                           move.popularity < 0.25 && // Low popularity threshold
+                           (!bestEvalMove || move.san !== bestEvalMove.san) &&
+                           (!repertoireMove || move.san !== repertoireMove.san);
+                });
+                
+                // Sort surprise candidates by evaluation
+                surpriseCandidates.sort((a, b) => (b.eval_numeric || 0) - (a.eval_numeric || 0));
+                if (surpriseCandidates.length > 0) {
+                    surpriseMove = surpriseCandidates[0];
+                    surpriseMove.type = "Surprise Move";
+                } else if (allMoves.length > 0) {
+                    // If no good surprise move, just pick a different move
+                    const candidateIndex = 1 % allMoves.length; // Choose a different index
+                    surpriseMove = allMoves[candidateIndex];
+                    surpriseMove.type = "Surprise Move";
+                }
+                
+                // For now, just identify the sharpest move by blunder/mistake chances
+                const movesByBlunderChance = [...allMoves].sort((a, b) => {
+                    return (b.blunder_chance || 0) - (a.blunder_chance || 0);
+                });
+                
+                if (movesByBlunderChance.length > 0) {
+                    sharpestMove = movesByBlunderChance[0];
+                    sharpestMove.type = "Sharpest Move";
+                    // Mark this for deferred loading
+                    sharpestMove.loadLater = true;
+                }
+                
+                // Add repertoire move card if available
+                if (repertoireMove) {
+                    const repertoireMoveCard = createMoveCard(
+                        repertoireMove.type,
+                        repertoireMove.san,
+                        repertoireMove.eval,
+                        repertoireMove.popularity_text,
+                        0, // No mistake chance data
+                        0, // No blunder chance data
+                        repertoireMove.uci,
+                        "#FF5722" // Orange color
+                    );
+                    movesContainer.append(repertoireMoveCard);
+                }
+                
+                // Add best eval move card if available
+                if (bestEvalMove && (!repertoireMove || bestEvalMove.san !== repertoireMove.san)) {
+                    const bestMoveCard = createMoveCard(
+                        bestEvalMove.type,
+                        bestEvalMove.san,
+                        bestEvalMove.eval,
+                        bestEvalMove.popularity_text,
+                        bestEvalMove.mistake_chance,
+                        bestEvalMove.blunder_chance,
+                        bestEvalMove.uci,
+                        "#2ecc71" // Green color
+                    );
+                    movesContainer.append(bestMoveCard);
+                }
+                
+                // Add surprise move card if available
+                if (surpriseMove && 
+                    (!repertoireMove || surpriseMove.san !== repertoireMove.san) &&
+                    (!bestEvalMove || surpriseMove.san !== bestEvalMove.san)) {
+                    const surpriseMoveCard = createMoveCard(
+                        surpriseMove.type,
+                        surpriseMove.san,
+                        surpriseMove.eval,
+                        surpriseMove.popularity_text,
+                        surpriseMove.mistake_chance,
+                        surpriseMove.blunder_chance,
+                        surpriseMove.uci,
+                        "#3498db" // Blue color
+                    );
+                    movesContainer.append(surpriseMoveCard);
+                }
+                
+                // Add placeholder for sharpest move (to be loaded later)
+                if (sharpestMove) {
+                    const sharpestMovePlaceholder = $(`
+                        <div class="move-card">
+                            <div class="move-header" style="background-color: #9b59b6;">Sharpest Move</div>
+                            <div class="move-notation">${sharpestMove.san}</div>
+                            <div class="move-stats">
+                                <div><strong>Eval:</strong> ${sharpestMove.eval}</div>
+                                <div><strong>Popularity:</strong> ${sharpestMove.popularity_text}</div>
+                                <div id="sharpest-mistake">
+                                    <strong>Opponent Mistake:</strong> 
+                                    <span class="loading-indicator">Loading...</span>
+                                </div>
+                                <div id="sharpest-blunder">
+                                    <strong>Opponent Blunder:</strong> 
+                                    <span class="loading-indicator">Loading...</span>
+                                </div>
+                            </div>
+                            <button class="add-to-repertoire-btn" data-move="${sharpestMove.san}" data-uci="${sharpestMove.uci}">
+                                Add to Repertoire
+                            </button>
+                        </div>
+                    `);
+                    movesContainer.append(sharpestMovePlaceholder);
+                    
+                    // Load the sharpest move data after a delay
+                    setTimeout(function() {
+                        // Format percentages
+                        const mistakePct = typeof sharpestMove.mistake_chance === 'number' ? 
+                            `${(sharpestMove.mistake_chance * 100).toFixed(1)}%` : 'N/A';
+                        const blunderPct = typeof sharpestMove.blunder_chance === 'number' ? 
+                            `${(sharpestMove.blunder_chance * 100).toFixed(1)}%` : 'N/A';
+                            
+                        $("#sharpest-mistake .loading-indicator").text(mistakePct);
+                        $("#sharpest-blunder .loading-indicator").text(blunderPct);
+                    }, 2000); // Load after 2 seconds
+                }
+                
+                linesDiv.append(movesContainer);
+                
+                // Add explanation if no moves are available
+                if (moveData.status && moveData.status !== "success") {
+                    linesDiv.append(`<div class="status-message">${moveData.status}</div>`);
+                }
+            } else if (result.moves && result.moves.length > 0) {
+                // Legacy support for old format
                 linesDiv.append("<h3>Sharp Lines Analysis:</h3>");
                 
                 result.moves.forEach(move => {
                     linesDiv.append(`<div class="move">${move}</div>`);
                 });
+            } else if (result.message && result.message.includes("No deviation detected")) {
+                // No need to display sharp lines section when there's no deviation
+                linesDiv.append("<h3>No Need for Sharpest Lines Analysis</h3>");
+                linesDiv.append("<div class='move'>You're following your repertoire perfectly!</div>");
             }
+        }
+        
+        function createMoveCard(type, move, evaluation, popularity, mistakeChance, blunderChance, uci, headerColor) {
+            // Create a card for a move with all its details
+            const card = $('<div class="move-card"></div>');
+            
+            // Use provided header color or default
+            headerColor = headerColor || "#3498db";
+            
+            const header = $(`<div class="move-header" style="background-color: ${headerColor};">${type}</div>`);
+            card.append(header);
+            
+            // Add move notation
+            const moveNotation = $(`<div class="move-notation">${move}</div>`);
+            card.append(moveNotation);
+            
+            // Add move stats
+            const stats = $('<div class="move-stats"></div>');
+            stats.append(`<div><strong>Eval:</strong> ${evaluation}</div>`);
+            stats.append(`<div><strong>Popularity:</strong> ${popularity}</div>`);
+            
+            // Only show mistake/blunder chances for certain move types
+            if (type === "Best Move" || type === "Sharpest Move") {
+                // Format percentages for mistake/blunder chances
+                const mistakePct = typeof mistakeChance === 'number' ? `${(mistakeChance * 100).toFixed(1)}%` : 'N/A';
+                const blunderPct = typeof blunderChance === 'number' ? `${(blunderChance * 100).toFixed(1)}%` : 'N/A';
+                
+                stats.append(`<div><strong>Opponent Mistake:</strong> ${mistakePct}</div>`);
+                stats.append(`<div><strong>Opponent Blunder:</strong> ${blunderPct}</div>`);
+            }
+            
+            card.append(stats);
+            
+            // Add button to add this move to repertoire
+            const addButton = $(`<button class="add-to-repertoire-btn" data-move="${move}" data-uci="${uci}">Add to Repertoire</button>`);
+            addButton.on('click', function() {
+                const moveText = $(this).data('move');
+                const moveUci = $(this).data('uci');
+                addMoveToRepertoire(moveText, moveUci);
+            });
+            
+            card.append(addButton);
+            
+            return card;
+        }
+        
+        function addMoveToRepertoire(moveText, moveUci) {
+            // This function would add the selected move to the user's repertoire
+            console.log(`Adding ${moveText} (${moveUci}) to repertoire`);
+            
+            // Get current repertoire
+            let repertoire = $("#repertoire").val();
+            
+            // Parse current game to determine where to add the move
+            const game = $("#game").val();
+            const moves = parsePgn(game);
+            
+            // Create a simple notification
+            alert(`Added ${moveText} to your repertoire.`);
+            
+            // For demonstration purposes, we'll append the chosen move to the repertoire
+            // In a real implementation, you would need to properly integrate this with your repertoire
+            // structure, potentially parsing the PGN and inserting the move in the correct position
+            $("#repertoire").val(repertoire.trim() + " " + moveText);
         }
         
         // Function to add an arrow to the board

@@ -145,6 +145,100 @@ class ChessComAdapter {
     }
 
     const isBlack = (lastCommonIndex + 1) % 2 === 1;
+    
+    // Analyze the current position and display results
+    this.displayAnalysisResults(moves, repertoire);
+    
     return { moves, lastCommonIndex, isBlack };
+  }
+  
+  /**
+   * Display analysis results in a notification/tooltip
+   * @param {Array} moves - Array of moves played in the game
+   * @param {Object} repertoire - User's repertoire object
+   */
+  displayAnalysisResults(moves, repertoire) {
+    // Get analysis results
+    const results = analyzeRepertoirePosition(moves, repertoire);
+    
+    // Create or update notification container
+    let container = document.getElementById('repertoire-analysis-container');
+    
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'repertoire-analysis-container';
+      container.style.position = 'fixed';
+      container.style.bottom = '20px';
+      container.style.right = '20px';
+      container.style.backgroundColor = 'white';
+      container.style.padding = '15px';
+      container.style.borderRadius = '5px';
+      container.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.2)';
+      container.style.zIndex = '9999';
+      container.style.maxWidth = '300px';
+      container.style.transition = 'opacity 0.3s ease-in-out';
+      document.body.appendChild(container);
+    }
+    
+    // Clear previous content
+    container.innerHTML = '';
+    
+    // Add message
+    const messageElement = document.createElement('div');
+    messageElement.style.fontWeight = 'bold';
+    messageElement.style.marginBottom = '10px';
+    messageElement.style.color = results.perfectMatch ? '#4CAF50' : '#2196F3';
+    messageElement.textContent = results.message;
+    container.appendChild(messageElement);
+    
+    // Add sharp lines if available and not a perfect match
+    if (!results.perfectMatch && results.moves && results.moves.length > 0) {
+      const sharpLinesTitle = document.createElement('div');
+      sharpLinesTitle.style.fontWeight = 'bold';
+      sharpLinesTitle.style.marginTop = '5px';
+      sharpLinesTitle.style.marginBottom = '5px';
+      sharpLinesTitle.textContent = 'Sharp Lines Analysis:';
+      container.appendChild(sharpLinesTitle);
+      
+      results.moves.forEach(move => {
+        const moveElement = document.createElement('div');
+        moveElement.style.marginBottom = '5px';
+        moveElement.textContent = move;
+        container.appendChild(moveElement);
+      });
+    }
+    
+    // Add close button
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Close';
+    closeButton.style.marginTop = '10px';
+    closeButton.style.padding = '5px 10px';
+    closeButton.style.backgroundColor = '#f0f0f0';
+    closeButton.style.border = '1px solid #ccc';
+    closeButton.style.borderRadius = '3px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.onclick = () => {
+      container.style.opacity = '0';
+      setTimeout(() => container.remove(), 300);
+    };
+    container.appendChild(closeButton);
+    
+    // Show the container with animation
+    container.style.opacity = '0';
+    setTimeout(() => {
+      container.style.opacity = '1';
+    }, 10);
+    
+    // Automatically hide after 10 seconds
+    setTimeout(() => {
+      if (container && document.body.contains(container)) {
+        container.style.opacity = '0';
+        setTimeout(() => {
+          if (container && document.body.contains(container)) {
+            container.remove();
+          }
+        }, 300);
+      }
+    }, 10000);
   }
 }
